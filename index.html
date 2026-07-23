@@ -566,17 +566,34 @@ document.addEventListener("pointerdown", e => {
   lastFrameTs = 0;
   dragEl.style.transformOrigin = (grabFrac.x * 100) + "% " + (grabFrac.y * 100) + "%";
   dragEl.style.display = "block";
-  pieceDom.style.visibility = "hidden";
+  pieceDom.style.opacity = "0.25";
   cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(dragFrame);
 });
-document.addEventListener("pointermove", e => {
+
+function supportsTouch() { return "ontouchstart" in window || navigator.maxTouchPoints > 0; }
+
+window.addEventListener("pointermove", e => {
   if (!drag) return;
   e.preventDefault();
   pendingPos = { x: e.clientX, y: e.clientY };
+}, { passive: false, capture: true });
+window.addEventListener("pointerup", () => { if (drag) endDrag(); }, true);
+/* Androidは盤面外で pointercancel を勝手に発火することがある。
+   タッチ端末ではタッチイベント側（下のフォールバック）で追従を続行する */
+window.addEventListener("pointercancel", () => {
+  if (drag && !supportsTouch()) cancelDrag();
+}, true);
+
+/* タッチイベントによる追従フォールバック（ポインタ系が中断されても続く） */
+window.addEventListener("touchmove", e => {
+  if (!drag) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  if (t) pendingPos = { x: t.clientX, y: t.clientY };
 }, { passive: false });
-document.addEventListener("pointerup", () => { if (drag) endDrag(); });
-document.addEventListener("pointercancel", () => { if (drag) cancelDrag(); });
+window.addEventListener("touchend", () => { if (drag) endDrag(); });
+window.addEventListener("touchcancel", () => { if (drag) cancelDrag(); });
 
 function dragXY() {
   return {
