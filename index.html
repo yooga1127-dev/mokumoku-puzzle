@@ -27,7 +27,8 @@
     flex-direction: column;
     align-items: center;
     overflow: hidden;
-    touch-action: manipulation;
+    touch-action: none;          /* ドラッグ中のブラウザジェスチャー（引っ張って更新等）を全面禁止 */
+    overscroll-behavior: none;
     user-select: none;
     -webkit-user-select: none;
   }
@@ -591,13 +592,13 @@ function dragFrame(ts) {
   const target = dragXY();
   const dt = lastFrameTs ? Math.min(0.05, (ts - lastFrameTs) / 1000) : 1 / 60;
   lastFrameTs = ts;
-  // 時間ベースの追従係数（リフレッシュレートに依存しない）
-  const k = 1 - Math.exp(-dt * 18);
+  // 時間ベースの追従係数（リフレッシュレートに依存しない・高剛性）
+  const k = 1 - Math.exp(-dt * 34);
   smooth.x += (target.x - smooth.x) * k;
   smooth.y += (target.y - smooth.y) * k;
   // 横方向の遅れ量に応じてちょっと傾く（味付け）
   const lag = target.x - smooth.x;
-  const rot = Math.max(-7, Math.min(7, lag * 0.06));
+  const rot = Math.max(-5, Math.min(5, lag * 0.05));
   dragEl.style.transform = `translate3d(${smooth.x}px,${smooth.y}px,0) rotate(${rot}deg)`;
   // 配置プレビューは指の実位置基準（狙いはズレない）
   updatePreview(target.x, target.y);
