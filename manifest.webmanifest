@@ -1,0 +1,16 @@
+{
+  "name": "もくもくパズル",
+  "short_name": "もくもく",
+  "description": "木のブロックを8×8盤面に配置して列を消すパズルゲーム",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#d9b382",
+  "theme_color": "#7a5230",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
