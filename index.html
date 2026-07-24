@@ -119,12 +119,13 @@
     box-shadow: inset 0 4px 12px rgba(0,0,0,0.35);
   }
   .tray-slot {
-    width: 30%;
+    width: 32%;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 96px;
+    min-height: 112px;
     touch-action: none;
+    cursor: grab;
   }
   .piece {
     position: relative;
@@ -259,7 +260,7 @@
     <button class="panel-btn" onclick="closePause()">▶ つづける</button>
     <button class="panel-btn sub" onclick="if(confirmRestart())newGame()">🔄 最初から</button>
     <button class="panel-btn sub" id="sound-btn" onclick="toggleSound()">🔊 サウンド ON</button>
-    <div class="best-line" style="margin-top:12px;">version 10 ・ <span id="unlock-info"></span></div>
+    <div class="best-line" style="margin-top:12px;">version 11 ・ <span id="unlock-info"></span></div>
   </div>
 </div>
 
@@ -549,7 +550,12 @@ function isCoarse() { return matchMedia("(pointer: coarse)").matches; }
 
 document.addEventListener("pointerdown", e => {
   if (gameOver) return;
-  const pieceDom = e.target.closest(".piece");
+  // ピース本体でなくても、トレイ枠のどこを触ってもその枠のピースを掴める（感度UP）
+  let pieceDom = e.target.closest(".piece");
+  if (!pieceDom) {
+    const slot = e.target.closest(".tray-slot");
+    if (slot) pieceDom = slot.querySelector(".piece");
+  }
   if (!pieceDom || pieceDom.classList.contains("used")) return;
   const idx = Number(pieceDom.dataset.index);
   const p = pieces[idx];
@@ -594,6 +600,7 @@ function supportsTouch() { return "ontouchstart" in window || navigator.maxTouch
 window.addEventListener("pointermove", e => {
   if (!drag) return;
   e.preventDefault();
+  if (cancelGrace) { clearTimeout(cancelGrace); cancelGrace = null; }  // 指が動いてる＝継続
   pendingPos = { x: e.clientX, y: e.clientY };
   dbgMove("PMOVE", e.clientX, e.clientY);
 }, { passive: false, capture: true });
@@ -606,14 +613,22 @@ window.addEventListener("pointercancel", () => {
 }, true);
 
 /* タッチイベントによる追従フォールバック（ポインタ系が中断されても続く） */
+let cancelGrace = null;
 window.addEventListener("touchmove", e => {
   if (!drag) return;
   e.preventDefault();
+  if (cancelGrace) { clearTimeout(cancelGrace); cancelGrace = null; }  // 指が動いてる＝継続
   const t = e.touches[0];
   if (t) { pendingPos = { x: t.clientX, y: t.clientY }; dbgMove("TMOVE", t.clientX, t.clientY); }
 }, { passive: false });
 window.addEventListener("touchend", () => { if (drag) { dbg("TEND"); endDrag(); } });
-window.addEventListener("touchcancel", () => { dbg("TCANCEL"); if (drag) cancelDrag(); });
+/* touchcancelは誤発火することがある → 0.25秒の猶予内に指の動きが続けばドラッグ継続 */
+window.addEventListener("touchcancel", () => {
+  dbg("TCANCEL");
+  if (!drag) return;
+  clearTimeout(cancelGrace);
+  cancelGrace = setTimeout(() => { if (drag) cancelDrag(); }, 250);
+});
 
 function dragXY() {
   return {
