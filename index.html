@@ -259,6 +259,7 @@
     <button class="panel-btn" onclick="closePause()">▶ つづける</button>
     <button class="panel-btn sub" onclick="if(confirmRestart())newGame()">🔄 最初から</button>
     <button class="panel-btn sub" id="sound-btn" onclick="toggleSound()">🔊 サウンド ON</button>
+    <div class="best-line" style="margin-top:12px;">version 9</div>
   </div>
 </div>
 
@@ -851,7 +852,7 @@ loadBest();
 document.getElementById("sound-btn").textContent = soundOn ? "🔊 サウンド ON" : "🔇 サウンド OFF";
 updateDiffButtons();
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {});
 }
 newGame();
 </script>
