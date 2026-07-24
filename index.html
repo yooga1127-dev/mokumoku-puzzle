@@ -143,17 +143,13 @@
     box-shadow: inset 0 2px 2px rgba(255,255,255,0.55), inset 0 -3px 3px rgba(90,58,30,0.55), 0 2px 4px rgba(0,0,0,0.4);
     border-radius: 4px;
   }
-  #drag-piece {
+  #drag-canvas {
     position: fixed;
-    left: 0; top: 0;
+    inset: 0;
     pointer-events: none;
     z-index: 30;
     display: none;
-    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.4));
-    will-change: transform;
   }
-  .dp-inner { position: relative; animation: pickup 0.1s ease-out; }
-  @keyframes pickup { from { transform: scale(0.6); } }
 
   /* ===== コンボ表示 ===== */
   #combo-pop {
@@ -238,7 +234,7 @@
   <div class="tray-slot" id="slot2"></div>
 </div>
 
-<div id="drag-piece"></div>
+<canvas id="drag-canvas"></canvas>
 <div id="combo-pop"></div>
 
 <div class="overlay" id="over-overlay">
@@ -510,7 +506,17 @@ function checkGameOver() {
 /* ============================================================
    ドラッグ操作（マウス・タッチ共通）
    ============================================================ */
-const dragEl = document.getElementById("drag-piece");
+/* ドラッグ中のピースは全画面キャンバスに毎フレーム直接描画する
+   （DOM浮遊レイヤーはAndroidで描画が消えることがあるため） */
+const dcv = document.getElementById("drag-canvas");
+const dctx = dcv.getContext("2d");
+function sizeDragCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  dcv.width = Math.round(window.innerWidth * dpr);
+  dcv.height = Math.round(window.innerHeight * dpr);
+  dcv.style.width = window.innerWidth + "px";
+  dcv.style.height = window.innerHeight + "px";
+}
 let drag = null; // {index, shape}
 let grabFrac = { x: 0.5, y: 0.5 }; // ピースのどこをつまんだか（割合）
 const TOUCH_LIFT = 55; // タッチ時だけ指の少し上に見せる
@@ -542,21 +548,17 @@ document.addEventListener("pointerdown", e => {
   try { pieceDom.setPointerCapture(e.pointerId); } catch (err) {}
   drag = { index: idx, shape: p.shape };
   sndPick();
-  // ピース描画（つまみ上げアニメ付き）
-  dragEl.innerHTML = "";
-  const inner = document.createElement("div");
-  inner.className = "dp-inner";
-  drawPiece(inner, p.shape, cellSize, 2);
-  inner.style.transformOrigin = (grabFrac.x * 100) + "% " + (grabFrac.y * 100) + "%";
-  dragEl.appendChild(inner);
-  // ドラッグ中は一切レイアウト計測しないよう、必要な数値を先に全部キャッシュ
+  // 描画キャンバスを準備＋ドラッグ中は一切レイアウト計測しないよう数値を先にキャッシュ
+  sizeDragCanvas();
+  const { rows, cols } = pieceSizeOf(p.shape);
   const brect = boardEl.getBoundingClientRect();
   dragCache = {
-    w: parseFloat(inner.style.width),
-    h: parseFloat(inner.style.height),
+    w: cols * (cellSize + 2) - 2,
+    h: rows * (cellSize + 2) - 2,
     bx: brect.left, by: brect.top,
     step: cellSize + 2,
     lift: isCoarse() ? TOUCH_LIFT : 0,
+    startTs: performance.now(),
   };
   pendingPos = { x: e.clientX, y: e.clientY };
   prevKey = "";
@@ -564,8 +566,7 @@ document.addEventListener("pointerdown", e => {
   const start = dragXY();
   smooth = { x: start.x, y: start.y };
   lastFrameTs = 0;
-  dragEl.style.transformOrigin = (grabFrac.x * 100) + "% " + (grabFrac.y * 100) + "%";
-  dragEl.style.display = "block";
+  dcv.style.display = "block";
   pieceDom.style.opacity = "0.25";
   cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(dragFrame);
@@ -619,7 +620,9 @@ function dragFrame(ts) {
     // 横方向の遅れ量に応じてちょっと傾く（味付け）
     const lag = target.x - smooth.x;
     const rot = Math.max(-5, Math.min(5, lag * 0.05));
-    dragEl.style.transform = `translate3d(${smooth.x}px,${smooth.y}px,0) rotate(${rot}deg)`;
+    // つまみ上げアニメ（0.1秒で0.6→1.0倍）
+    const grow = Math.min(1, (performance.now() - dragCache.startTs) / 100);
+    drawDragPiece(smooth.x, smooth.y, rot, 0.6 + 0.4 * grow);
     // 配置プレビューは指の実位置基準（狙いはズレない）
     updatePreview(target.x, target.y);
     dbgFrame(ts);
@@ -678,12 +681,54 @@ function updatePreview(x, y) {
     }
   }
 }
+/* キャンバスへのピース描画（回転・拡大の基準＝つまんだ位置） */
+function drawDragPiece(x, y, rotDeg, scale) {
+  const dpr = window.devicePixelRatio || 1;
+  dctx.setTransform(1, 0, 0, 1, 0, 0);
+  dctx.clearRect(0, 0, dcv.width, dcv.height);
+  dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const px = x + dragCache.w * grabFrac.x;
+  const py = y + dragCache.h * grabFrac.y;
+  dctx.translate(px, py);
+  dctx.rotate(rotDeg * Math.PI / 180);
+  dctx.scale(scale, scale);
+  dctx.translate(-px, -py);
+  const rr = (cx, cy, w, h, r) => {
+    dctx.beginPath();
+    if (dctx.roundRect) dctx.roundRect(cx, cy, w, h, r);
+    else dctx.rect(cx, cy, w, h);
+  };
+  dctx.shadowColor = "rgba(0,0,0,0.35)";
+  dctx.shadowBlur = 14;
+  dctx.shadowOffsetY = 8;
+  for (const [r, c] of drag.shape.cells) {
+    const cx = x + c * (cellSize + 2), cy = y + r * (cellSize + 2);
+    const g2 = dctx.createLinearGradient(cx, cy, cx + cellSize, cy + cellSize);
+    g2.addColorStop(0, "#eccf9f");
+    g2.addColorStop(0.6, "#c89a62");
+    g2.addColorStop(1, "#8b5a2b");
+    dctx.fillStyle = g2;
+    rr(cx, cy, cellSize, cellSize, 5);
+    dctx.fill();
+  }
+  dctx.shadowColor = "transparent";
+  dctx.strokeStyle = "rgba(255,255,255,0.5)";
+  dctx.lineWidth = 2.5;
+  for (const [r, c] of drag.shape.cells) {
+    const cx = x + c * (cellSize + 2), cy = y + r * (cellSize + 2);
+    rr(cx + 2, cy + 2, cellSize - 4, cellSize - 4, 4);
+    dctx.stroke();
+  }
+}
+
 function clearDragVisual() {
   cancelAnimationFrame(rafId);
   for (const el of prevCells) el.classList.remove("preview");
   prevCells = [];
   prevKey = "";
-  dragEl.style.display = "none";
+  dctx.setTransform(1, 0, 0, 1, 0, 0);
+  dctx.clearRect(0, 0, dcv.width, dcv.height);
+  dcv.style.display = "none";
 }
 function endDrag() {
   const { x, y } = dragXY();
