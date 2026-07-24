@@ -259,7 +259,7 @@
     <button class="panel-btn" onclick="closePause()">▶ つづける</button>
     <button class="panel-btn sub" onclick="if(confirmRestart())newGame()">🔄 最初から</button>
     <button class="panel-btn sub" id="sound-btn" onclick="toggleSound()">🔊 サウンド ON</button>
-    <div class="best-line" style="margin-top:12px;">version 9</div>
+    <div class="best-line" style="margin-top:12px;">version 10 ・ <span id="unlock-info"></span></div>
   </div>
 </div>
 
@@ -300,6 +300,21 @@ const SHAPES = [
   { cells: [[0,0],[0,1],[0,2],[1,2],[2,2]], w: 1.2 },
   { cells: [[0,2],[1,2],[2,0],[2,1],[2,2]], w: 1.2 },
 ];
+
+/* スコア解放ブロック：2000点ごとに2種ずつ出現（そのゲーム内のスコア基準） */
+const NEW_TIERS = [
+  [ { cells: [[0,1],[0,2],[1,0],[1,1]], w: 1.5 }, { cells: [[0,0],[0,1],[1,1],[1,2]], w: 1.5 } ], // 2000: S字/Z字
+  [ { cells: [[0,0],[0,1],[0,2],[1,1]], w: 1.5 }, { cells: [[1,0],[1,1],[1,2],[0,1]], w: 1.5 } ], // 4000: T字
+  [ { cells: [[0,0],[1,1]], w: 1.2 }, { cells: [[0,1],[1,0]], w: 1.2 } ],                         // 6000: 斜め2
+  [ { cells: [[0,0],[1,0],[1,1],[2,1]], w: 1.5 }, { cells: [[0,1],[1,0],[1,1],[2,0]], w: 1.5 } ], // 8000: 縦S/縦Z
+  [ { cells: [[0,1],[1,0],[1,1],[1,2],[2,1]], w: 1 }, { cells: [[0,0],[0,2],[1,0],[1,1],[1,2]], w: 1 } ], // 10000: 十字/U字
+  [ { cells: [[0,0],[1,1],[2,2]], w: 1 }, { cells: [[0,2],[1,1],[2,0]], w: 1 } ],                 // 12000: 斜め3
+];
+function unlockedTierCount() { return Math.min(NEW_TIERS.length, Math.floor(score / 2000)); }
+function currentPool() {
+  const n = unlockedTierCount();
+  return n > 0 ? SHAPES.concat(...NEW_TIERS.slice(0, n)) : SHAPES;
+}
 
 /* ============================================================
    サウンド
@@ -389,10 +404,11 @@ function adjWeight(s) {
   return s.w;
 }
 function randomShape() {
-  const total = SHAPES.reduce((s, x) => s + adjWeight(x), 0);
+  const pool = currentPool();
+  const total = pool.reduce((s, x) => s + adjWeight(x), 0);
   let roll = Math.random() * total;
-  for (const s of SHAPES) { roll -= adjWeight(s); if (roll <= 0) return s; }
-  return SHAPES[0];
+  for (const s of pool) { roll -= adjWeight(s); if (roll <= 0) return s; }
+  return pool[0];
 }
 function dealPieces() {
   for (let i = 0; i < 3; i++) pieces[i] = { shape: randomShape(), used: false };
@@ -757,10 +773,20 @@ function cancelDrag() {
 /* ============================================================
    スコア・進行
    ============================================================ */
+let shownTier = 0;
 function updateHud() {
   document.getElementById("score").textContent = score;
   if (score > best) { best = score; saveBest(); }
   document.getElementById("best").textContent = best;
+  // 新ブロック解放演出
+  const t = unlockedTierCount();
+  if (t > shownTier && !gameOver) {
+    shownTier = t;
+    const pop = document.getElementById("combo-pop");
+    pop.textContent = "🧩 新ブロック解放!";
+    pop.classList.remove("show"); void pop.offsetWidth; pop.classList.add("show");
+    sndClear(3);
+  }
 }
 function saveBest() {
   try { localStorage.setItem("wp_best", String(best)); } catch (e) {}
@@ -770,14 +796,19 @@ function loadBest() {
 }
 function newGame() {
   grid = Array.from({ length: N }, () => Array(N).fill(0));
-  score = 0; combo = 0; gameOver = false;
+  score = 0; combo = 0; gameOver = false; shownTier = 0;
   document.getElementById("over-overlay").classList.remove("show");
   document.getElementById("pause-overlay").classList.remove("show");
   renderBoard();
   dealPieces();
   updateHud();
 }
-function openPause() { document.getElementById("pause-overlay").classList.add("show"); }
+function openPause() {
+  const n = unlockedTierCount();
+  document.getElementById("unlock-info").textContent =
+    `ブロック${currentPool().length}種` + (n < NEW_TIERS.length ? `（次の解放：${(n + 1) * 2000}点）` : "（全解放！）");
+  document.getElementById("pause-overlay").classList.add("show");
+}
 function closePause() { document.getElementById("pause-overlay").classList.remove("show"); }
 function confirmRestart() { return true; }
 
