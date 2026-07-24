@@ -577,11 +577,13 @@ window.addEventListener("pointermove", e => {
   if (!drag) return;
   e.preventDefault();
   pendingPos = { x: e.clientX, y: e.clientY };
+  dbgMove("PMOVE", e.clientX, e.clientY);
 }, { passive: false, capture: true });
-window.addEventListener("pointerup", () => { if (drag) endDrag(); }, true);
+window.addEventListener("pointerup", () => { if (drag) { dbg("PUP"); endDrag(); } }, true);
 /* Androidは盤面外で pointercancel を勝手に発火することがある。
    タッチ端末ではタッチイベント側（下のフォールバック）で追従を続行する */
 window.addEventListener("pointercancel", () => {
+  dbg("PCANCEL");
   if (drag && !supportsTouch()) cancelDrag();
 }, true);
 
@@ -590,10 +592,10 @@ window.addEventListener("touchmove", e => {
   if (!drag) return;
   e.preventDefault();
   const t = e.touches[0];
-  if (t) pendingPos = { x: t.clientX, y: t.clientY };
+  if (t) { pendingPos = { x: t.clientX, y: t.clientY }; dbgMove("TMOVE", t.clientX, t.clientY); }
 }, { passive: false });
-window.addEventListener("touchend", () => { if (drag) endDrag(); });
-window.addEventListener("touchcancel", () => { if (drag) cancelDrag(); });
+window.addEventListener("touchend", () => { if (drag) { dbg("TEND"); endDrag(); } });
+window.addEventListener("touchcancel", () => { dbg("TCANCEL"); if (drag) cancelDrag(); });
 
 function dragXY() {
   return {
@@ -606,20 +608,54 @@ let smooth = { x: 0, y: 0 };
 let lastFrameTs = 0;
 function dragFrame(ts) {
   if (!drag) return;
-  const target = dragXY();
-  const dt = lastFrameTs ? Math.min(0.05, (ts - lastFrameTs) / 1000) : 1 / 60;
-  lastFrameTs = ts;
-  // 時間ベースの追従係数（リフレッシュレートに依存しない・高剛性）
-  const k = 1 - Math.exp(-dt * 34);
-  smooth.x += (target.x - smooth.x) * k;
-  smooth.y += (target.y - smooth.y) * k;
-  // 横方向の遅れ量に応じてちょっと傾く（味付け）
-  const lag = target.x - smooth.x;
-  const rot = Math.max(-5, Math.min(5, lag * 0.05));
-  dragEl.style.transform = `translate3d(${smooth.x}px,${smooth.y}px,0) rotate(${rot}deg)`;
-  // 配置プレビューは指の実位置基準（狙いはズレない）
-  updatePreview(target.x, target.y);
+  try {
+    const target = dragXY();
+    const dt = lastFrameTs ? Math.min(0.05, (ts - lastFrameTs) / 1000) : 1 / 60;
+    lastFrameTs = ts;
+    // 時間ベースの追従係数（リフレッシュレートに依存しない・高剛性）
+    const k = 1 - Math.exp(-dt * 34);
+    smooth.x += (target.x - smooth.x) * k;
+    smooth.y += (target.y - smooth.y) * k;
+    // 横方向の遅れ量に応じてちょっと傾く（味付け）
+    const lag = target.x - smooth.x;
+    const rot = Math.max(-5, Math.min(5, lag * 0.05));
+    dragEl.style.transform = `translate3d(${smooth.x}px,${smooth.y}px,0) rotate(${rot}deg)`;
+    // 配置プレビューは指の実位置基準（狙いはズレない）
+    updatePreview(target.x, target.y);
+    dbgFrame(ts);
+  } catch (err) {
+    dbg("ERR " + err.message);  // 何があっても描画ループは殺さない
+  }
   rafId = requestAnimationFrame(dragFrame);
+}
+
+/* ===== デバッグモード（URLに ?debug=1 で有効） ===== */
+const DBG = new URLSearchParams(location.search).has("debug");
+let dbgEl = null, dbgLastMove = 0, dbgLastFrame = 0;
+function dbg(msg) {
+  if (!DBG) return;
+  if (!dbgEl) {
+    dbgEl = document.createElement("div");
+    dbgEl.style.cssText = "position:fixed;top:4px;left:4px;z-index:999;background:rgba(0,0,0,0.75);color:#7fff7f;font:11px/1.5 monospace;padding:6px 8px;border-radius:8px;pointer-events:none;white-space:pre;max-width:70vw;";
+    document.body.appendChild(dbgEl);
+  }
+  dbgEl.textContent = (dbgEl.textContent + "\n" + msg).split("\n").slice(-11).join("\n");
+}
+function dbgMove(tag, x, y) {
+  if (!DBG) return;
+  const now = performance.now();
+  if (now - dbgLastMove < 250) return;
+  dbgLastMove = now;
+  dbg(`${tag} ${x | 0},${y | 0}`);
+}
+function dbgFrame(ts) {
+  if (!DBG) return;
+  if (ts - dbgLastFrame < 400) return;
+  dbgLastFrame = ts;
+  dbg(`FRAME ${smooth.x | 0},${smooth.y | 0} drag=${!!drag}`);
+}
+if (DBG) {
+  window.addEventListener("error", e => dbg("JSERR " + (e.message || "").slice(0, 60)));
 }
 function targetCellOf(x, y) {
   return {
