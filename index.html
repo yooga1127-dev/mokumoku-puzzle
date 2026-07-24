@@ -251,16 +251,11 @@
 <div class="overlay" id="pause-overlay">
   <div class="panel">
     <h2>ポーズ</h2>
-    <div class="best-line" style="margin:10px 0 4px;">むずかしさ（次のピースから反映）</div>
-    <div style="display:flex; gap:6px;">
-      <button class="panel-btn sub" style="margin-top:0; font-size:13px; padding:10px 4px;" id="diff-easy" onclick="setDifficulty('easy')">🌱 やさしい</button>
-      <button class="panel-btn sub" style="margin-top:0; font-size:13px; padding:10px 4px;" id="diff-normal" onclick="setDifficulty('normal')">🔥 ふつう</button>
-      <button class="panel-btn sub" style="margin-top:0; font-size:13px; padding:10px 4px;" id="diff-hard" onclick="setDifficulty('hard')">💀 むずい</button>
-    </div>
+    <div class="best-line" style="margin:10px 0;">ひとやすみ中にゃ ☕</div>
     <button class="panel-btn" onclick="closePause()">▶ つづける</button>
     <button class="panel-btn sub" onclick="if(confirmRestart())newGame()">🔄 最初から</button>
     <button class="panel-btn sub" id="sound-btn" onclick="toggleSound()">🔊 サウンド ON</button>
-    <div class="best-line" style="margin-top:12px;">version 11 ・ <span id="unlock-info"></span></div>
+    <div class="best-line" style="margin-top:12px;">version 12 ・ <span id="unlock-info"></span></div>
   </div>
 </div>
 
@@ -382,33 +377,11 @@ function renderBoard() {
 /* ============================================================
    ピース生成・描画
    ============================================================ */
-/* 難易度：出やすいピースの傾向を変える */
-let difficulty = "normal";
-try { difficulty = localStorage.getItem("wp_diff") || "normal"; } catch (e) {}
-function setDifficulty(d) {
-  difficulty = d;
-  try { localStorage.setItem("wp_diff", d); } catch (e) {}
-  updateDiffButtons();
-}
-function updateDiffButtons() {
-  for (const d of ["easy", "normal", "hard"]) {
-    const b = document.getElementById("diff-" + d);
-    if (b) b.style.background = d === difficulty
-      ? "linear-gradient(180deg,#7ec850,#4e9a2e)"
-      : "linear-gradient(180deg,#d8b98a,#b8945e)";
-  }
-}
-function adjWeight(s) {
-  const size = s.cells.length;
-  if (difficulty === "easy") return s.w * (size <= 3 ? 1.8 : size >= 6 ? 0.3 : 1);
-  if (difficulty === "hard") return s.w * (size >= 5 ? 2.0 : size <= 2 ? 0.4 : 1);
-  return s.w;
-}
 function randomShape() {
   const pool = currentPool();
-  const total = pool.reduce((s, x) => s + adjWeight(x), 0);
+  const total = pool.reduce((s, x) => s + x.w, 0);
   let roll = Math.random() * total;
-  for (const s of pool) { roll -= adjWeight(s); if (roll <= 0) return s; }
+  for (const s of pool) { roll -= s.w; if (roll <= 0) return s; }
   return pool[0];
 }
 function dealPieces() {
@@ -896,7 +869,6 @@ buildAppIcon();
 buildBoard();
 loadBest();
 document.getElementById("sound-btn").textContent = soundOn ? "🔊 サウンド ON" : "🔇 サウンド OFF";
-updateDiffButtons();
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {});
 }

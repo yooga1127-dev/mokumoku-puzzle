@@ -1,7 +1,7 @@
 /* もくもくパズル Service Worker
    ページ本体＝ネット優先（オンライン時は常に最新版・圏外時のみ保存版）
    その他アセット＝キャッシュ優先 */
-const CACHE = "mokumoku-v8";
+const CACHE = "mokumoku-v9";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
